@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import {
     TrendingUp,
@@ -7,25 +8,75 @@ import {
     Calendar as CalendarIcon,
     Clock,
     Car,
-    ChevronRight,
     MoreVertical
 } from "lucide-react";
 import { motion } from "framer-motion";
-
-const STATS = [
-    { label: 'Total Revenue', value: '$14,500', change: '+12%', icon: TrendingUp, color: 'text-emerald-500' },
-    { label: 'Active Jobs', value: '18', sub: '4 in progress', icon: Car, color: 'text-blue-500' },
-    { label: 'New Customers', value: '124', change: '+8%', icon: Users, color: 'text-indigo-500' },
-];
-
-const APPOINTMENTS = [
-    { id: 1, client: 'Michael Chen', car: 'Tesla Model S Plaid', service: 'Full Ceramic + Interior', time: '09:00 AM - 01:00 PM', status: 'In Progress', statusColor: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
-    { id: 2, client: 'Sarah Davis', car: 'Porsche 911 Carrera', service: 'Paint Correction + PPF', time: '01:30 PM - 05:30 PM', status: 'Scheduled', statusColor: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
-    { id: 3, client: 'David Wilson', car: 'Range Rover Autobiography', service: 'Executive Wash', time: '02:00 PM - 04:00 PM', status: 'Scheduled', statusColor: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
-    { id: 4, client: 'Emily Rodriguez', car: 'Audi RS e-tron GT', service: 'Interior Deep Clean', time: '04:30 PM - 06:30 PM', status: 'Scheduled', statusColor: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
-];
+import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
+    const [stats, setStats] = useState([
+        { label: 'Total Revenue', value: '$0', change: '+0%', icon: TrendingUp, color: 'text-emerald-500' },
+        { label: 'Active Jobs', value: '0', sub: '0 in progress', icon: Car, color: 'text-blue-500' },
+        { label: 'New Customers', value: '0', change: '+0%', icon: Users, color: 'text-indigo-500' },
+    ]);
+    const [appointments, setAppointments] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                // 1. Fetch Stats
+                const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
+                const { data: activeJobs } = await supabase.from('appointments').select('*').eq('status', 'In Progress');
+                const { data: revenueData } = await supabase.from('appointments').select('total_price').eq('status', 'Completed'); // Revenue from completed jobs
+
+                const totalRevenue = revenueData?.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0) || 0;
+
+                setStats([
+                    { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, change: '+100%', icon: TrendingUp, color: 'text-emerald-500' },
+                    { label: 'Active Jobs', value: String(activeJobs?.length || 0), sub: `${activeJobs?.length || 0} in progress`, icon: Car, color: 'text-blue-500' },
+                    { label: 'New Customers', value: String(customerCount || 0), change: '+100%', icon: Users, color: 'text-indigo-500' },
+                ]);
+
+                // 2. Fetch Today's Appointments
+                // Getting everything for demo purposes, usually filter by date
+                const { data: apts } = await supabase
+                    .from('appointments')
+                    .select(`
+                        id, 
+                        status, 
+                        start_time, 
+                        service:services(name), 
+                        customer:customers(full_name), 
+                        vehicle:vehicles(make, model, year)
+                    `)
+                    .order('start_time', { ascending: true })
+                    .limit(5);
+
+                if (apts) {
+                    const formattedApts = apts.map(a => ({
+                        id: a.id,
+                        client: a.customer?.full_name || 'Unknown',
+                        car: a.vehicle ? `${a.vehicle.year} ${a.vehicle.make} ${a.vehicle.model}` : 'Unknown Vehicle',
+                        service: a.service?.name || 'Detailing',
+                        // Format time from ISO
+                        time: new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        status: a.status,
+                        statusColor: a.status === 'In Progress' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                    }));
+                    setAppointments(formattedApts);
+                }
+            } catch (error) {
+                console.error("Error fetching dashboard data:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchData();
+    }, []);
+
     return (
         <DashboardShell>
             <div className="space-y-10 pb-20">
@@ -38,7 +89,7 @@ export default function DashboardPage() {
 
                 {/* Stats Grid */}
                 <section className="dashboard-grid">
-                    {STATS.map((stat, i) => (
+                    {stats.map((stat, i) => (
                         <motion.div
                             key={stat.label}
                             initial={{ opacity: 0, y: 20 }}
@@ -49,7 +100,9 @@ export default function DashboardPage() {
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{stat.label}</p>
-                                    <h3 className="text-3xl font-outfit font-bold mt-1">{stat.value}</h3>
+                                    <h3 className="text-3xl font-outfit font-bold mt-1">
+                                        {loading ? "..." : stat.value}
+                                    </h3>
                                 </div>
                                 <div className={`p-3 rounded-xl bg-gray-900 border border-gray-800 ${stat.color}`}>
                                     <stat.icon size={24} />
@@ -60,7 +113,7 @@ export default function DashboardPage() {
                                 <span className="text-gray-500 text-xs font-medium">{stat.change ? 'from last week' : stat.sub}</span>
                             </div>
                         </motion.div>
-                    ))} section
+                    ))}
                 </section>
 
                 {/* Appointments List Section */}
@@ -74,7 +127,15 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="space-y-4">
-                        {APPOINTMENTS.map((apt, i) => (
+                        {loading && <div className="text-gray-500">Loading appointments...</div>}
+
+                        {!loading && appointments.length === 0 && (
+                            <div className="glass-card p-10 text-center text-gray-500">
+                                No appointments scheduled for today.
+                            </div>
+                        )}
+
+                        {appointments.map((apt, i) => (
                             <motion.div
                                 key={apt.id}
                                 initial={{ opacity: 0, x: -20 }}
@@ -86,7 +147,7 @@ export default function DashboardPage() {
                                     {/* Client Info */}
                                     <div className="flex items-center gap-4 min-w-[200px]">
                                         <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center text-gray-400 font-bold">
-                                            {apt.client.split(' ').map(n => n[0]).join('')}
+                                            {apt.client.split(' ').map((n: string) => n[0]).join('')}
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-lg leading-none">{apt.client}</h4>
