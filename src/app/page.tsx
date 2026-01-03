@@ -55,16 +55,22 @@ export default function DashboardPage() {
                     .limit(5);
 
                 if (apts) {
-                    const formattedApts = apts.map(a => ({
-                        id: a.id,
-                        client: a.customer?.full_name || 'Unknown',
-                        car: a.vehicle ? `${a.vehicle.year} ${a.vehicle.make} ${a.vehicle.model}` : 'Unknown Vehicle',
-                        service: a.service?.name || 'Detailing',
-                        // Format time from ISO
-                        time: new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        status: a.status,
-                        statusColor: a.status === 'In Progress' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                    }));
+                    const formattedApts = apts.map((a: any) => {
+                        const customer = Array.isArray(a.customer) ? a.customer[0] : a.customer;
+                        const vehicle = Array.isArray(a.vehicle) ? a.vehicle[0] : a.vehicle;
+                        const service = Array.isArray(a.service) ? a.service[0] : a.service;
+
+                        return {
+                            id: a.id,
+                            client: customer?.full_name || 'Unknown',
+                            car: vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : 'Unknown Vehicle',
+                            service: service?.name || 'Detailing',
+                            // Format time from ISO
+                            time: new Date(a.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            status: a.status,
+                            statusColor: a.status === 'In Progress' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                        };
+                    });
                     setAppointments(formattedApts);
                 }
             } catch (error) {
