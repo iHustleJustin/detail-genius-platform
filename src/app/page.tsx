@@ -54,7 +54,9 @@ export default function DashboardPage() {
                     .order('start_time', { ascending: true })
                     .limit(5);
 
+                console.log("DEBUG: Supabase data variable:", apts);
                 if (apts) {
+                    console.log("DEBUG: First customer structure:", apts[0]?.customer);
                     const formattedApts = apts.map((a: any) => {
                         const customer = Array.isArray(a.customer) ? a.customer[0] : a.customer;
                         const vehicle = Array.isArray(a.vehicle) ? a.vehicle[0] : a.vehicle;
